@@ -113,6 +113,29 @@ function extractDecisionSentences(notes) {
     .filter((s) => /\bis (final|decided)\b|\bwas decided\b/i.test(s));
 }
 
+// Cross-check that a claimed owner name actually appears in the same source
+// sentence as the task's own words. The model sometimes borrows an owner
+// name from a neighboring sentence about a different task (e.g. "Sarah will
+// finalize X" bleeding onto an unrelated "we agreed to hold off on Y" line).
+// Rather than pattern-matching every possible decision phrasing, this checks
+// the claim directly: if the name isn't in any sentence that shares real
+// content words with the item, the attribution is almost certainly
+// misattributed, so strip the owner tag instead of dropping the whole item.
+function stripMisattributedOwner(item, notes) {
+  const ownerMatch = item.match(/^(.*)\s\(([^)]+)\)$/);
+  if (!ownerMatch) return item;
+  const [, task, owner] = ownerMatch;
+  const taskWords = words(task);
+  const sentences = notes.split(/(?<=[.!?])\s+/);
+  const ownerLower = owner.toLowerCase();
+  const supportingSentence = sentences.some((s) => {
+    if (!s.toLowerCase().includes(ownerLower)) return false;
+    const sentenceWords = words(s);
+    return taskWords.some((w) => sentenceWords.includes(w));
+  });
+  return supportingSentence ? item : task.trim();
+}
+
 function parseItems(text) {
   return text
     .split("\n")
@@ -181,6 +204,10 @@ export async function extract(modelId, notes) {
   // a deadline/owner borrowed from a different sentence.
   const decisionWordSets = extractDecisionSentences(notes).map(words);
   items = items.filter((i) => !isRehashedPastTopic(i, decisionWordSets));
+
+  // Drop any owner name that isn't actually supported by the sentence the
+  // task itself came from (see stripMisattributedOwner above).
+  items = items.map((i) => stripMisattributedOwner(i, notes));
 
   const noneFound = items.length === 0 || (items.length === 1 && /no action items/i.test(items[0]));
 
