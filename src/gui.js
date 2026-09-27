@@ -11,6 +11,10 @@ import { extract } from "./actionitems.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT ? Number(process.env.PORT) : 31014;
 const PUBLIC_DIR = path.join(__dirname, "..", "public");
+// Generous cap for a single-field JSON body — big enough for a full page of
+// meeting notes, small enough to reject a malformed/huge upload before it
+// grows unbounded in memory across many chunks.
+const MAX_BODY_BYTES = 200_000;
 
 function serveStatic(res) {
   const html = fs.readFileSync(path.join(PUBLIC_DIR, "index.html"));
@@ -19,9 +23,18 @@ function serveStatic(res) {
 }
 
 function readBody(req) {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     let body = "";
-    req.on("data", (chunk) => (body += chunk));
+    let bytes = 0;
+    req.on("data", (chunk) => {
+      bytes += chunk.length;
+      if (bytes > MAX_BODY_BYTES) {
+        reject(new Error("Request body too large"));
+        req.destroy();
+        return;
+      }
+      body += chunk;
+    });
     req.on("end", () => {
       try {
         resolve(JSON.parse(body || "{}"));
@@ -52,7 +65,8 @@ async function main() {
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify(result));
       } catch (error) {
-        res.writeHead(500, { "Content-Type": "application/json" });
+        const status = error.message === "Request body too large" ? 413 : 500;
+        res.writeHead(status, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ error: error.message }));
       }
       return;
