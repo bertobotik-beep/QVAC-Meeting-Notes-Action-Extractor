@@ -1,0 +1,25 @@
+{
+  "name": "qvac-meeting-notes-action-extractor",
+  "version": "1.0.0",
+  "description": "Paste raw meeting notes and an on-device AI extracts a clean list of action items, grounded only in what was actually said. No cloud call, no API key.",
+  "type": "module",
+  "main": "src/gui.js",
+  "scripts": {
+    "start": "node src/gui.js",
+    "gui": "node src/gui.js"
+  },
+  "keywords": [
+    "qvac",
+    "on-device-ai",
+    "llm",
+    "offline-ai",
+    "productivity"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "@qvac/sdk": "^0.19.0"
+  },
+  "engines": {
+    "node": ">=22.17"
+  }
+}
